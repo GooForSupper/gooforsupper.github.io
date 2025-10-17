@@ -15,7 +15,7 @@
         escalateDelayMax: 7600,
         wanderDelayMin: 900,
         wanderDelayMax: 2300,
-        travelMultiplier: 1.55
+        travelMultiplier: .5
     };
 
     let uid = 0;
