@@ -182,7 +182,12 @@
             cell.removeEventListener('keydown', cell._keyHandler);
             delete cell._keyHandler;
         }
+        if (cell._blurHandler) {
+            cell.removeEventListener('blur', cell._blurHandler);
+            delete cell._blurHandler;
+        }
         cell.classList.remove('linked', 'linked-discord', 'linked-youtube');
+        cell.classList.remove('armed');
         cell.removeAttribute('role');
         cell.removeAttribute('tabindex');
         cell.removeAttribute('aria-label');
@@ -214,14 +219,31 @@
         const openLink = () => window.open(spec.url, '_blank', 'noopener');
         const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
         const pointerEvent = isMobile ? 'click' : 'dblclick';
+        const requiresArm = pointerEvent === 'click';
+
+        const disarm = () => {
+            cell.classList.remove('armed');
+        };
 
         const clickHandler = (event) => {
+            if (requiresArm) {
+                if (!cell.classList.contains('armed')) {
+                    event.preventDefault();
+                    cell.classList.add('armed');
+                    if (typeof cell.focus === 'function') {
+                        cell.focus({ preventScroll: true });
+                    }
+                    return;
+                }
+                disarm();
+            }
             event.preventDefault();
             openLink();
         };
         const keyHandler = (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
+                disarm();
                 openLink();
             }
         };
@@ -233,6 +255,13 @@
         cell.setAttribute('aria-label', spec.aria);
         cell.addEventListener(pointerEvent, clickHandler);
         cell.addEventListener('keydown', keyHandler);
+        if (requiresArm) {
+            cell.addEventListener('blur', disarm);
+            cell._blurHandler = disarm;
+        } else if (cell._blurHandler) {
+            cell.removeEventListener('blur', cell._blurHandler);
+            delete cell._blurHandler;
+        }
         cell._linkHandler = clickHandler;
         cell._linkEventType = pointerEvent;
         cell._keyHandler = keyHandler;

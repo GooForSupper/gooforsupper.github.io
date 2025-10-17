@@ -91,6 +91,10 @@ body::before {
     transition: fill .2s ease;
 }
 
+.eye.linked.armed svg .pupil {
+    fill: #ff2e2e;
+}
+
 .eye.linked:hover svg .pupil,
 .eye.linked:focus-visible svg .pupil {
     fill: #ff2e2e;
@@ -99,6 +103,10 @@ body::before {
 .eye.linked svg .logo {
     opacity: 0;
     transition: opacity .2s ease;
+}
+
+.eye.linked.armed svg .logo {
+    opacity: 1;
 }
 
 .eye.linked:hover svg .logo,
