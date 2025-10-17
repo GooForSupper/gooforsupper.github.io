@@ -8,6 +8,15 @@
         { type: 'youtube', url: 'https://youtu.be/dontblinktrailer', aria: "Bekijk de YouTube-trailer van DON'T BLINK." }
     ];
     const BLINK_SETTINGS = { minDelay: 3500, maxDelay: 9500, duration: 160 };
+    const IDLE_BEHAVIOR = {
+        initialDelayMin: 4500,
+        initialDelayMax: 10500,
+        escalateDelayMin: 3800,
+        escalateDelayMax: 7600,
+        wanderDelayMin: 900,
+        wanderDelayMax: 2300,
+        travelMultiplier: 1.55
+    };
 
     let uid = 0;
     function makeEye() {
@@ -85,7 +94,9 @@
             targetY: cy,
             curX: cx,
             curY: cy,
-            pupil
+            pupil,
+            isRogue: false,
+            wanderNext: 0
         };
 
         const cell = document.createElement('div');
@@ -126,11 +137,26 @@
 
     function chooseTitleIndices(rows, cols, count) {
         if (count < 2) return null;
-        const attempts = Math.min(count * 3, 12);
+
+        // Helper: ensure titles are never adjacent (including diagonals).
+        // Enforce Chebyshev distance >= 2 between positions.
+        const isSeparated = (a, b) => {
+            const ar = Math.floor(a / cols);
+            const ac = a % cols;
+            const br = Math.floor(b / cols);
+            const bc = b % cols;
+            const dr = Math.abs(ar - br);
+            const dc = Math.abs(ac - bc);
+            return Math.max(dr, dc) >= 2;
+        };
+
+        const attempts = Math.min(count * 3, 18);
         for (let attempt = 0; attempt < attempts; attempt++) {
             const dontIndex = Math.floor(Math.random() * count);
             const dontRow = Math.floor(dontIndex / cols);
             const dontCol = dontIndex % cols;
+
+            // Prefer any cell on lower rows; otherwise, same row to the right
             const lowerRows = [];
             const sameRow = [];
             for (let i = 0; i < count; i++) {
@@ -138,28 +164,39 @@
                 const row = Math.floor(i / cols);
                 const col = i % cols;
                 if (row > dontRow) lowerRows.push(i);
-                else if (row === dontRow && col >= dontCol) sameRow.push(i);
+                else if (row === dontRow && col >= dontCol + 2) sameRow.push(i); // at least one eye between in same row
             }
-            const blinkPool = lowerRows.length ? lowerRows : sameRow;
+
+            // Filter with separation rule (avoid adjacency including diagonal)
+            const lowerValid = lowerRows.filter(i => isSeparated(dontIndex, i));
+            const sameRowValid = sameRow.filter(i => isSeparated(dontIndex, i));
+            const blinkPool = lowerValid.length ? lowerValid : sameRowValid;
             if (!blinkPool.length) continue;
             const blinkIndex = blinkPool[Math.floor(Math.random() * blinkPool.length)];
             return { dontIndex, blinkIndex };
         }
-        // Fallback ensures we always return a valid order if random attempts failed.
+
+        // Fallback: deterministic scan honoring constraints
         for (let dontIndex = 0; dontIndex < count; dontIndex++) {
             const dontRow = Math.floor(dontIndex / cols);
             const dontCol = dontIndex % cols;
-            let fallbackBlink = -1;
+            // First, scan lower rows
+            for (let blinkIndex = 0; blinkIndex < count; blinkIndex++) {
+                if (blinkIndex === dontIndex) continue;
+                const row = Math.floor(blinkIndex / cols);
+                if (row > dontRow && isSeparated(dontIndex, blinkIndex)) {
+                    return { dontIndex, blinkIndex };
+                }
+            }
+            // Then, scan same row to the right with at least 1 gap
             for (let blinkIndex = 0; blinkIndex < count; blinkIndex++) {
                 if (blinkIndex === dontIndex) continue;
                 const row = Math.floor(blinkIndex / cols);
                 const col = blinkIndex % cols;
-                if (row > dontRow) return { dontIndex, blinkIndex };
-                if (fallbackBlink === -1 && row === dontRow && col >= dontCol) {
-                    fallbackBlink = blinkIndex;
+                if (row === dontRow && col >= dontCol + 2 && isSeparated(dontIndex, blinkIndex)) {
+                    return { dontIndex, blinkIndex };
                 }
             }
-            if (fallbackBlink !== -1) return { dontIndex, blinkIndex: fallbackBlink };
         }
         return null;
     }
@@ -173,6 +210,14 @@
         return { rows, cols };
     }
 
+    const rogueEyes = new Set();
+    let idleTimeoutId = null;
+    let escalationTimeoutId = null;
+
+    function randomRange(min, max) {
+        return min + Math.random() * (max - min);
+    }
+
     function chooseRandomIndices(count, max) {
         const pool = Array.from({ length: max }, (_, i) => i);
         const picks = [];
@@ -181,6 +226,79 @@
             picks.push(pool.splice(idx, 1)[0]);
         }
         return picks;
+    }
+
+    function clearEyeRogue(svg) {
+        if (!svg || !svg._state || !svg._state.isRogue) return;
+        svg._state.isRogue = false;
+        svg._state.wanderNext = 0;
+        const cell = svg.closest('.eye');
+        if (cell) cell.classList.remove('eye-rogue');
+        rogueEyes.delete(svg);
+    }
+
+    function resetAllRogueEyes() {
+        const current = Array.from(rogueEyes);
+        current.forEach(svg => clearEyeRogue(svg));
+        rogueEyes.clear();
+    }
+
+    function setEyeRogue(svg) {
+        if (!svg || !svg._state || svg._state.isRogue) return false;
+        svg._state.isRogue = true;
+        svg._state.wanderNext = 0;
+        const cell = svg.closest('.eye');
+        if (cell) cell.classList.add('eye-rogue');
+        rogueEyes.add(svg);
+        return true;
+    }
+
+    function addRandomRogueEye() {
+        const candidates = Array.from(grid.querySelectorAll('.eye svg')).filter(svg => svg._state && !svg._state.isRogue);
+        if (!candidates.length) return false;
+        const choice = candidates[Math.floor(Math.random() * candidates.length)];
+        return setEyeRogue(choice);
+    }
+
+    function clearIdleTimers() {
+        if (idleTimeoutId) {
+            clearTimeout(idleTimeoutId);
+            idleTimeoutId = null;
+        }
+        if (escalationTimeoutId) {
+            clearTimeout(escalationTimeoutId);
+            escalationTimeoutId = null;
+        }
+    }
+
+    function scheduleNextEscalation() {
+        clearTimeout(escalationTimeoutId);
+        const totalEyes = grid.querySelectorAll('.eye svg').length;
+        if (!totalEyes || rogueEyes.size >= totalEyes) return;
+        const delay = randomRange(IDLE_BEHAVIOR.escalateDelayMin, IDLE_BEHAVIOR.escalateDelayMax);
+        escalationTimeoutId = setTimeout(() => {
+            if (addRandomRogueEye()) scheduleNextEscalation();
+        }, delay);
+    }
+
+    function startIdleSequence() {
+        if (!addRandomRogueEye()) return;
+        scheduleNextEscalation();
+    }
+
+    function scheduleIdleTimer() {
+        clearTimeout(idleTimeoutId);
+        const delay = randomRange(IDLE_BEHAVIOR.initialDelayMin, IDLE_BEHAVIOR.initialDelayMax);
+        idleTimeoutId = setTimeout(() => {
+            idleTimeoutId = null;
+            startIdleSequence();
+        }, delay);
+    }
+
+    function handleUserActivity() {
+        clearIdleTimers();
+        if (rogueEyes.size) resetAllRogueEyes();
+        scheduleIdleTimer();
     }
 
     function stopBlink(cell) {
@@ -340,15 +458,37 @@
     }
 
     function assignSpecialEyes() {
-        const cells = Array.from(grid.querySelectorAll('.eye'));
-        cells.forEach(clearSpecial);
-        if (cells.length < specialLinks.length) return;
+        const allEyes = Array.from(grid.querySelectorAll('.eye'));
+        allEyes.forEach(clearSpecial);
+        if (allEyes.length < specialLinks.length) return;
 
-        const indices = chooseRandomIndices(specialLinks.length, cells.length);
+        // On mobile, avoid placing specials in the bottom rows where they may be less visible.
+        const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
+        let candidates = allEyes;
+        if (isMobile && gridShape && gridShape.rows && gridShape.cols) {
+            const rows = gridShape.rows;
+            const cols = gridShape.cols;
+            // Avoid bottom 2 rows if possible; if the grid is short, avoid only bottom 1.
+            const avoidCount = rows >= 4 ? 2 : (rows >= 3 ? 1 : 0);
+            if (avoidCount > 0) {
+                candidates = allEyes.filter(cell => {
+                    const idx = Array.prototype.indexOf.call(grid.children, cell);
+                    if (idx < 0) return false;
+                    const row = Math.floor(idx / cols);
+                    return row < rows - avoidCount; // keep rows above the avoided zone
+                });
+                // If we filtered too aggressively and don't have enough, fall back to all eyes
+                if (candidates.length < specialLinks.length) {
+                    candidates = allEyes;
+                }
+            }
+        }
+
+        const indices = chooseRandomIndices(specialLinks.length, candidates.length);
         if (indices.length < specialLinks.length) return;
         const specs = specialLinks.slice().sort(() => Math.random() - 0.5);
         specs.forEach((spec, i) => {
-            const cell = cells[indices[i]];
+            const cell = candidates[indices[i]];
             if (cell) markSpecial(cell, spec);
         });
     }
@@ -366,6 +506,8 @@
             const replacement = makeEye();
             grid.replaceChild(replacement, titleCell);
         });
+
+        resetAllRogueEyes();
 
         const totalSlots = rows * cols;
         let eyes = Array.from(grid.querySelectorAll('.eye'));
@@ -427,11 +569,29 @@
         }
     }
 
-    function tick() {
+    function updateRogueTargets(svg, now) {
+        const st = svg._state;
+        if (!st.isRogue) return;
+        if (!st.wanderNext || now >= st.wanderNext) {
+            const maxTravel = st.baseTravelMax * IDLE_BEHAVIOR.travelMultiplier;
+            const travel = randomRange(st.baseTravelMin * 0.6, maxTravel);
+            const angle = Math.random() * Math.PI * 2;
+            const targetX = st.cx + Math.cos(angle) * travel;
+            const targetY = st.cy + Math.sin(angle) * travel;
+            st.targetX = clamp(targetX, st.cx - maxTravel, st.cx + maxTravel);
+            st.targetY = clamp(targetY, st.cy - maxTravel, st.cy + maxTravel);
+            st.wanderNext = now + randomRange(IDLE_BEHAVIOR.wanderDelayMin, IDLE_BEHAVIOR.wanderDelayMax);
+        }
+    }
+
+    function tick(now) {
         const svgs = grid.querySelectorAll('svg');
+        const timestamp = typeof now === 'number' ? now : performance.now();
         svgs.forEach(svg => {
-            computeTargets(svg);
             const st = svg._state;
+            if (!st) return;
+            if (st.isRogue) updateRogueTargets(svg, timestamp);
+            else computeTargets(svg);
             st.curX = lerp(st.curX, st.targetX, st.lerpAlpha);
             st.curY = lerp(st.curY, st.targetY, st.lerpAlpha);
             st.pupil.setAttribute('cx', st.curX.toFixed(2));
@@ -443,6 +603,7 @@
     window.addEventListener('mousemove', e => {
         mouseX = e.clientX;
         mouseY = e.clientY;
+        handleUserActivity();
     }, { passive: true });
 
     window.addEventListener('touchmove', e => {
@@ -451,9 +612,17 @@
             mouseX = t.clientX;
             mouseY = t.clientY;
         }
+        handleUserActivity();
     }, { passive: true });
 
-    window.addEventListener('resize', () => rebuildEyes());
+    window.addEventListener('resize', () => {
+        rebuildEyes();
+        handleUserActivity();
+    });
+
+    window.addEventListener('mousedown', handleUserActivity);
+    window.addEventListener('touchstart', handleUserActivity);
+    window.addEventListener('keydown', handleUserActivity);
 
     window.mobileCheck = function() {
     let check = false;
@@ -463,4 +632,5 @@
 
     rebuildEyes(true);
     requestAnimationFrame(tick);
+    scheduleIdleTimer();
 })();
