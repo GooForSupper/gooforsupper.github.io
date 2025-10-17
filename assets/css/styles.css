@@ -1,0 +1,143 @@
+:root {
+    --bg: #000000;
+    --line: #000000;
+    --white: #f6f7fb;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--white);
+}
+
+body {
+    display: grid;
+    place-items: center;
+    font-family: system-ui, sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: -80px;
+    background-image: url('../bg/FilmGrain.png');
+    background-size: 1000px 1000px;
+    opacity: .4;
+    mix-blend-mode: screen;
+    filter: contrast(1.5) brightness(10);
+    animation: grainShift 5.2s steps(7) infinite;
+    pointer-events: none;
+    z-index: 100;
+}
+
+@keyframes grainShift {
+    0% {
+        transform: translate3d(0, 0, 0) scale3d(1.08, 1.08, 1);
+    }
+
+    20% {
+        transform: translate3d(-45px, -60px, 0) scale3d(1.12, 1.12, 1);
+    }
+
+    40% {
+        transform: translate3d(58px, -42px, 0) scale3d(1.15, 1.15, 1);
+    }
+
+    60% {
+        transform: translate3d(-52px, 48px, 0) scale3d(1.1, 1.1, 1);
+    }
+
+    80% {
+        transform: translate3d(50px, 56px, 0) scale3d(1.16, 1.16, 1);
+    }
+
+    100% {
+        transform: translate3d(0, 0, 0) scale3d(1.08, 1.08, 1);
+    }
+}
+
+.wrap {
+    width: min(92vw, 1800px);
+    height: min(85vh, 1200px);
+    display: grid;
+    grid-auto-rows: 1fr;
+    z-index: 1;
+    gap: min(2vmin, 16px);
+}
+
+.eye {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+}
+
+.eye.linked {
+    cursor: pointer;
+    position: relative;
+    outline: none;
+}
+
+.eye.linked svg .pupil {
+    fill: #cc1e1e;
+    transition: fill .2s ease;
+}
+
+.eye.linked:hover svg .pupil,
+.eye.linked:focus-visible svg .pupil {
+    fill: #ff2e2e;
+}
+
+.eye.linked svg .logo {
+    opacity: 0;
+    transition: opacity .2s ease;
+}
+
+.eye.linked:hover svg .logo,
+.eye.linked:focus-visible svg .logo {
+    opacity: 1;
+}
+
+.eye svg .lid-top,
+.eye svg .lid-bottom {
+    transform: scaleY(0);
+    transform-box: fill-box;
+    transition: transform .12s ease-in;
+    pointer-events: none;
+}
+
+.eye svg .lid-top {
+    transform-origin: top center;
+}
+
+.eye svg .lid-bottom {
+    transform-origin: bottom center;
+}
+
+.eye.blinking svg .lid-top,
+.eye.blinking svg .lid-bottom {
+    transform: scaleY(1);
+}
+
+svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.hint {
+    position: fixed;
+    left: 12px;
+    bottom: 10px;
+    opacity: .6;
+    font-size: .9rem;
+    user-select: none;
+}
