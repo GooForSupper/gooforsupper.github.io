@@ -216,10 +216,10 @@
         const logo = createLogoGroup(svg, spec.type);
         inner.appendChild(logo);
 
-        const openLink = () => window.open(spec.url, '_blank', 'noopener');
-        const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
-        const pointerEvent = isMobile ? 'click' : 'dblclick';
-        const requiresArm = pointerEvent === 'click';
+    const openLink = () => window.open(spec.url, '_blank', 'noopener');
+    const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
+    const pointerEvent = 'click';
+    const requiresArm = !!isMobile;
 
         const disarm = () => {
             cell.classList.remove('armed');
