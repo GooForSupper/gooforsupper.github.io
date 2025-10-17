@@ -4,7 +4,7 @@
     const GRID_LIMITS = { minCols: 2, maxCols: 8, minRows: 2, maxRows: 8 };
     const gridShape = { rows: 0, cols: 0 };
     const specialLinks = [
-        { type: 'discord', url: 'https://discord.gg/dontblink', aria: "Opent de Discord-community van DON'T BLINK." },
+        { type: 'discord', url: 'https://discord.gg/sak9PMyA42', aria: "Opent de Discord-community van DON'T BLINK." },
         { type: 'youtube', url: 'https://youtu.be/dontblinktrailer', aria: "Bekijk de YouTube-trailer van DON'T BLINK." }
     ];
     const BLINK_SETTINGS = { minDelay: 3500, maxDelay: 9500, duration: 160 };
