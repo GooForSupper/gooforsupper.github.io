@@ -30,7 +30,7 @@ body::before {
     inset: -80px;
     background-image: url('../bg/FilmGrain.png');
     background-size: 1000px 1000px;
-    opacity: .4;
+    opacity: .3;
     mix-blend-mode: screen;
     filter: contrast(1.5) brightness(10);
     animation: grainShift 5.2s steps(7) infinite;
