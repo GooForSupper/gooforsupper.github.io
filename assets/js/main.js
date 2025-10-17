@@ -94,6 +94,76 @@
         return cell;
     }
 
+    function convertEyeToTitle(cell, word, modifier) {
+        if (!cell || cell.classList.contains('title-cell')) return;
+        clearSpecial(cell);
+        stopBlink(cell);
+        const svg = cell.querySelector('svg');
+        if (svg) svg.remove();
+        cell.classList.remove('eye', 'blinking', 'linked', 'linked-discord', 'linked-youtube', 'armed');
+        cell.classList.remove('title-cell-dont', 'title-cell-blink');
+        cell.removeAttribute('role');
+        cell.removeAttribute('tabindex');
+        cell.removeAttribute('aria-label');
+        delete cell.dataset.linkType;
+        delete cell._linkHandler;
+        delete cell._linkEventType;
+        delete cell._keyHandler;
+        delete cell._blurHandler;
+        if (cell._armTimeout) {
+            clearTimeout(cell._armTimeout);
+            delete cell._armTimeout;
+        }
+        cell.textContent = '';
+
+        const wordEl = document.createElement('span');
+        wordEl.className = `title-word title-word-${modifier}`;
+        wordEl.textContent = word;
+
+        cell.classList.add('title-cell', `title-cell-${modifier}`);
+        cell.appendChild(wordEl);
+    }
+
+    function chooseTitleIndices(rows, cols, count) {
+        if (count < 2) return null;
+        const attempts = Math.min(count * 3, 12);
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            const dontIndex = Math.floor(Math.random() * count);
+            const dontRow = Math.floor(dontIndex / cols);
+            const dontCol = dontIndex % cols;
+            const lowerRows = [];
+            const sameRow = [];
+            for (let i = 0; i < count; i++) {
+                if (i === dontIndex) continue;
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+                if (row > dontRow) lowerRows.push(i);
+                else if (row === dontRow && col >= dontCol) sameRow.push(i);
+            }
+            const blinkPool = lowerRows.length ? lowerRows : sameRow;
+            if (!blinkPool.length) continue;
+            const blinkIndex = blinkPool[Math.floor(Math.random() * blinkPool.length)];
+            return { dontIndex, blinkIndex };
+        }
+        // Fallback ensures we always return a valid order if random attempts failed.
+        for (let dontIndex = 0; dontIndex < count; dontIndex++) {
+            const dontRow = Math.floor(dontIndex / cols);
+            const dontCol = dontIndex % cols;
+            let fallbackBlink = -1;
+            for (let blinkIndex = 0; blinkIndex < count; blinkIndex++) {
+                if (blinkIndex === dontIndex) continue;
+                const row = Math.floor(blinkIndex / cols);
+                const col = blinkIndex % cols;
+                if (row > dontRow) return { dontIndex, blinkIndex };
+                if (fallbackBlink === -1 && row === dontRow && col >= dontCol) {
+                    fallbackBlink = blinkIndex;
+                }
+            }
+            if (fallbackBlink !== -1) return { dontIndex, blinkIndex: fallbackBlink };
+        }
+        return null;
+    }
+
     function computeGridShape() {
         const ratio = window.innerWidth && window.innerHeight ? window.innerWidth / window.innerHeight : 1;
         const idealCols = Math.round(Math.sqrt(TOTAL_EYES * ratio));
@@ -216,10 +286,10 @@
         const logo = createLogoGroup(svg, spec.type);
         inner.appendChild(logo);
 
-    const openLink = () => window.open(spec.url, '_blank', 'noopener');
-    const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
-    const pointerEvent = 'click';
-    const requiresArm = !!isMobile;
+        const openLink = () => window.open(spec.url, '_blank', 'noopener');
+        const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
+        const pointerEvent = 'click';
+        const requiresArm = !!isMobile;
 
         const disarm = () => {
             cell.classList.remove('armed');
@@ -270,7 +340,7 @@
     }
 
     function assignSpecialEyes() {
-        const cells = Array.from(grid.children);
+        const cells = Array.from(grid.querySelectorAll('.eye'));
         cells.forEach(clearSpecial);
         if (cells.length < specialLinks.length) return;
 
@@ -290,17 +360,35 @@
         gridShape.cols = cols;
         grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-        const needed = rows * cols;
-        const current = grid.children.length;
-        if (current < needed) {
-            for (let i = current; i < needed; i++) grid.appendChild(makeEye());
-        } else if (current > needed) {
-            for (let i = current - 1; i >= needed; i--) {
-                const cell = grid.children[i];
+
+        const existingTitles = Array.from(grid.querySelectorAll('.title-cell'));
+        existingTitles.forEach(titleCell => {
+            const replacement = makeEye();
+            grid.replaceChild(replacement, titleCell);
+        });
+
+        const totalSlots = rows * cols;
+        let eyes = Array.from(grid.querySelectorAll('.eye'));
+        const current = eyes.length;
+        if (current < totalSlots) {
+            for (let i = current; i < totalSlots; i++) grid.appendChild(makeEye());
+        } else if (current > totalSlots) {
+            for (let i = current - 1; i >= totalSlots; i--) {
+                const cell = eyes[i];
+                if (!cell) continue;
                 clearSpecial(cell);
                 grid.removeChild(cell);
             }
         }
+
+        eyes = Array.from(grid.querySelectorAll('.eye'));
+        const titleSelection = chooseTitleIndices(rows, cols, eyes.length);
+        if (titleSelection) {
+            const { dontIndex, blinkIndex } = titleSelection;
+            if (eyes[dontIndex]) convertEyeToTitle(eyes[dontIndex], "DON'T", 'dont');
+            if (eyes[blinkIndex]) convertEyeToTitle(eyes[blinkIndex], 'BLINK', 'blink');
+        }
+
         assignSpecialEyes();
     }
 
