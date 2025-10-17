@@ -133,11 +133,3 @@ svg {
     overflow: visible;
 }
 
-.hint {
-    position: fixed;
-    left: 12px;
-    bottom: 10px;
-    opacity: .6;
-    font-size: .9rem;
-    user-select: none;
-}
