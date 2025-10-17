@@ -462,25 +462,36 @@
         allEyes.forEach(clearSpecial);
         if (allEyes.length < specialLinks.length) return;
 
-        // On mobile, avoid placing specials in the bottom rows where they may be less visible.
-        const isMobile = typeof window.mobileCheck === 'function' && window.mobileCheck();
+        // On mobile-like devices, avoid placing specials in the "lower-ish" rows.
+        const mediaCoarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+        const narrowScreen = Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 820;
+        const isMobileLike = (typeof window.mobileCheck === 'function' && window.mobileCheck()) || mediaCoarse || narrowScreen;
         let candidates = allEyes;
-        if (isMobile && gridShape && gridShape.rows && gridShape.cols) {
+        if (isMobileLike && gridShape && gridShape.rows && gridShape.cols) {
             const rows = gridShape.rows;
             const cols = gridShape.cols;
-            // Avoid bottom 2 rows if possible; if the grid is short, avoid only bottom 1.
-            const avoidCount = rows >= 4 ? 2 : (rows >= 3 ? 1 : 0);
-            if (avoidCount > 0) {
-                candidates = allEyes.filter(cell => {
-                    const idx = Array.prototype.indexOf.call(grid.children, cell);
-                    if (idx < 0) return false;
-                    const row = Math.floor(idx / cols);
-                    return row < rows - avoidCount; // keep rows above the avoided zone
-                });
-                // If we filtered too aggressively and don't have enough, fall back to all eyes
-                if (candidates.length < specialLinks.length) {
-                    candidates = allEyes;
-                }
+
+            // Start by avoiding roughly the bottom 35% of rows, but at least 1 row; never exclude all rows.
+            let rowsToAvoid = Math.max(1, Math.min(rows - 1, Math.round(rows * 0.35)));
+
+            const buildCandidates = (avoid) => allEyes.filter(cell => {
+                const idx = Array.prototype.indexOf.call(grid.children, cell);
+                if (idx < 0) return false;
+                const row = Math.floor(idx / cols);
+                return row < rows - avoid;
+            });
+
+            candidates = buildCandidates(rowsToAvoid);
+
+            // If not enough candidates, relax the constraint until we have enough or none left to relax
+            while (candidates.length < specialLinks.length && rowsToAvoid > 0) {
+                rowsToAvoid -= 1;
+                candidates = buildCandidates(rowsToAvoid);
+            }
+
+            // Final fallback to all eyes if still not enough
+            if (candidates.length < specialLinks.length) {
+                candidates = allEyes;
             }
         }
 
