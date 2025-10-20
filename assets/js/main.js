@@ -13,8 +13,8 @@
         initialDelayMax: 10500,
         escalateDelayMin: 3800,
         escalateDelayMax: 7600,
-        wanderDelayMin: 900,
-        wanderDelayMax: 2300,
+        wanderDelayMin: 500,
+        wanderDelayMax: 1000,
         travelMultiplier: .5
     };
 
